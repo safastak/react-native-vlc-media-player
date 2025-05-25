@@ -193,7 +193,7 @@ export type VLCPlayerProps = VLCPlayerCallbackProps & {
   /**
    * Object that contains the uri of a video or song to play eg
    */
-  source: VLCPlayerSource;
+  source?: VLCPlayerSource;
 
   /**
    * local subtitle file path，if you want to hide subtitle,

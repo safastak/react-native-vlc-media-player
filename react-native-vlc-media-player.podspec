@@ -5,8 +5,8 @@ Pod::Spec.new do |s|
   s.requires_arc = true
   s.author       = { 'roshan.milinda' => 'rmilinda@gmail.com' }
   s.license      = 'MIT'
-  s.homepage     = 'https://github.com/razorRun/react-native-vlc-media-player.git'
-  s.source       = { :git => "https://github.com/razorRun/react-native-vlc-media-player.git" }
+  s.homepage     = 'https://github.com/safastak/react-native-vlc-media-player.git'
+  s.source       = { :git => "https://github.com/safastak/react-native-vlc-media-player.git" }
   s.source_files = 'ios/RCTVLCPlayer/*'
   s.ios.deployment_target = "8.4"
   s.tvos.deployment_target = "10.2"

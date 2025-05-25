@@ -20,7 +20,7 @@ jobs:
       - name: Set Git environment and update package number
         run: |
           git config --global user.name 'GIT Package Updater'
-          git config --global user.email 'razorRun@users.noreply.github.com'
+          git config --global user.email 'safastak@users.noreply.github.com'
           npm version patch
           git push
       - run: npm ci

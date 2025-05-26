@@ -23,6 +23,7 @@
 - (void)startRecording:(NSString*)path;
 - (void)stopRecording;
 - (void)snapshot:(NSString*)path;
+- (void)setSource:(NSDictionary*)source;
 - (void)play;
 - (void)pause;
 @end

@@ -326,6 +326,16 @@ declare class PlaybackMethods<T> extends Component<T> {
    * @param ratio Aspect ratio to use
    */
   changeVideoAspectRatio(ratio: string);
+
+  /**
+   * Pause playback
+   */
+  pause();
+
+  /**
+   * Play playback
+   */
+  play();
 }
 
 /**

@@ -31,4 +31,7 @@
 - (void)stopRecording;
 - (void)stopPlayer;
 - (void)snapshot:(NSString*)path;
+- (void)setSource:(NSDictionary*)source;
+- (void)play;
+- (void)pause;
 @end

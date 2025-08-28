@@ -36,6 +36,22 @@ export default class VLCPlayer extends Component {
     this._root.setNativeProps(nativeProps);
   }
 
+  play() {
+    UIManager.dispatchViewManagerCommand(
+      ReactNative.findNodeHandle(this),
+      UIManager.getViewManagerConfig('RCTVLCPlayer').Commands.play,
+      []
+    );
+  }
+  
+  pause() {
+    UIManager.dispatchViewManagerCommand(
+      ReactNative.findNodeHandle(this),
+      UIManager.getViewManagerConfig('RCTVLCPlayer').Commands.pause,
+      []
+    );
+  }
+
   startRecording(path) {
     UIManager.dispatchViewManagerCommand(
       ReactNative.findNodeHandle(this),

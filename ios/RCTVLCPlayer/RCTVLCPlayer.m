@@ -90,6 +90,10 @@ static NSString *const playbackRate = @"rate";
 
 - (void)setSource:(NSDictionary *)source
 {
+    // Store current autoplay state
+    BOOL shouldAutoplay = _autoplay;
+    float currentVolume = _pendingVolume;
+
     if (_player) {
         [self _release];
     }
@@ -101,7 +105,7 @@ static NSString *const playbackRate = @"rate";
     NSURL* uri = [NSURL URLWithString:uriString];
     int initType = [source objectForKey:@"initType"];
     NSDictionary* initOptions = [source objectForKey:@"initOptions"];
-    
+
     // Get acceptInvalidCertificates from source
     _acceptInvalidCertificates = [[source objectForKey:@"acceptInvalidCertificates"] boolValue];
     NSLog(@"iOS: Set acceptInvalidCertificates to %@", _acceptInvalidCertificates ? @"YES" : @"NO");
@@ -113,27 +117,31 @@ static NSString *const playbackRate = @"rate";
     }
     _player.delegate = self;
     _player.drawable = self;
-    // [bavv edit end]
 
+    // VLCLibrary operations MUST happen on main thread to avoid deadlock
     VLCLibrary *library = _player.libraryInstance;
 
+    // Disable logger to prevent deadlock - only enable in development if needed
+    #if defined(DEBUG) && TARGET_IPHONE_SIMULATOR
     VLCConsoleLogger *consoleLogger = [[VLCConsoleLogger alloc] init];
-    consoleLogger.level = kVLCLogLevelDebug;
+    consoleLogger.level = kVLCLogLevelError; // Reduced from Debug to Error
     library.loggers = @[consoleLogger];
+    #endif
 
     // Create dialog provider with custom UI to handle dialogs programmatically
     self.dialogProvider = [[VLCDialogProvider alloc] initWithLibrary:library customUI:YES];
     self.dialogProvider.customRenderer = self;
     _player.media = [VLCMedia mediaWithURL:uri];
 
-    if (_autoplay)
+    if (shouldAutoplay)
         [_player play];
 
-    if (!isnan(_pendingVolume)) {
-        [self setVolume:_pendingVolume];
+    if (!isnan(currentVolume)) {
+        [self setVolume:currentVolume];
     }
-    
+
     [[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
+    // [bavv edit end]
 }
 
 - (void)setVolume:(float)volume
@@ -554,15 +562,23 @@ static NSString *const playbackRate = @"rate";
 
 - (void)_release
 {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    // Don't remove notification observers here - they should persist for app lifecycle
+    // [[NSNotificationCenter defaultCenter] removeObserver:self];
 
-    if (_player.media)
-        [_player stop];
-
-    if (_player)
+    if (_player) {
+        if (_player.media) {
+            [_player stop];
+        }
+        _player.delegate = nil;
         _player = nil;
+    }
 
-    _eventDispatcher = nil;
+    if (self.dialogProvider) {
+        self.dialogProvider = nil;
+    }
+
+    // Don't nil out eventDispatcher - it should persist
+    // _eventDispatcher = nil;
 }
 
 
@@ -570,7 +586,10 @@ static NSString *const playbackRate = @"rate";
 - (void)removeFromSuperview
 {
     NSLog(@"removeFromSuperview");
+    // Clean up notification observers only when view is actually removed
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [self _release];
+    _eventDispatcher = nil;
     [super removeFromSuperview];
 }
 

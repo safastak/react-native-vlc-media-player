@@ -133,6 +133,18 @@ static NSString *const playbackRate = @"rate";
     self.dialogProvider.customRenderer = self;
     _player.media = [VLCMedia mediaWithURL:uri];
 
+    // Configure audio session for playback
+    NSError *error = nil;
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setCategory:AVAudioSessionCategoryPlayback error:&error];
+    if (error) {
+        NSLog(@"Failed to set audio session category: %@", error);
+    }
+    [audioSession setActive:YES error:&error];
+    if (error) {
+        NSLog(@"Failed to activate audio session: %@", error);
+    }
+
     if (shouldAutoplay)
         [_player play];
 
@@ -140,7 +152,6 @@ static NSString *const playbackRate = @"rate";
         [self setVolume:currentVolume];
     }
 
-    [[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
     // [bavv edit end]
 }
 
@@ -511,8 +522,8 @@ static NSString *const playbackRate = @"rate";
     
     // Check if this is a certificate-related dialog
     NSString *fullText = [NSString stringWithFormat:@"%@ %@", title ?: @"", message ?: @""];
-    BOOL isCertificateDialog = [fullText containsString:@"certificate"] || 
-                              [fullText containsString:@"SSL"] || 
+    BOOL isCertificateDialog = [fullText containsString:@"certificate"] ||
+                              [fullText containsString:@"SSL"] ||
                               [fullText containsString:@"TLS"] ||
                               [fullText containsString:@"cert"] ||
                               [fullText containsString:@"security"];
@@ -533,18 +544,18 @@ static NSString *const playbackRate = @"rate";
     }
 }
 
-- (void)showProgressWithTitle:(NSString *)title 
-                      message:(NSString *)message 
-                isIndeterminate:(BOOL)indeterminate 
-                       position:(float)position 
-                 cancelString:(NSString *)cancel 
+- (void)showProgressWithTitle:(NSString *)title
+                      message:(NSString *)message
+                isIndeterminate:(BOOL)indeterminate
+                       position:(float)position
+                 cancelString:(NSString *)cancel
                 withReference:(NSValue *)reference {
     NSLog(@"VLC Progress - Title: %@, Message: %@, Position: %.2f", title, message, position);
     // Handle progress dialog if needed
 }
 
-- (void)updateProgressWithReference:(NSValue *)reference 
-                            message:(NSString *)message 
+- (void)updateProgressWithReference:(NSValue *)reference
+                            message:(NSString *)message
                            position:(float)position {
     // Update progress dialog
 }
@@ -554,7 +565,7 @@ static NSString *const playbackRate = @"rate";
     // Handle dialog cancellation
 }
 
-- (void)setAcceptInvalidCertificates:(BOOL)accept 
+- (void)setAcceptInvalidCertificates:(BOOL)accept
 {
     _acceptInvalidCertificates = accept;
     NSLog(@"iOS: Set acceptInvalidCertificates to %@", accept ? @"YES" : @"NO");

@@ -93,6 +93,14 @@ export default class VLCPlayer extends Component {
     this.setNativeProps({ resume: isResume });
   }
 
+  setVolume(volume) {
+    UIManager.dispatchViewManagerCommand(
+      ReactNative.findNodeHandle(this),
+      UIManager.getViewManagerConfig('RCTVLCPlayer').Commands.setVolume,
+      [volume]
+    );
+  }
+
   autoAspectRatio(isAuto) {
     this.setNativeProps({ autoAspectRatio: isAuto });
   }

@@ -9,6 +9,7 @@
 #import <MobileVLCKit/MobileVLCKit.h>
 #endif
 #import <AVFoundation/AVFoundation.h>
+#import <math.h>
 static NSString *const statusKeyPath = @"status";
 static NSString *const playbackLikelyToKeepUpKeyPath = @"playbackLikelyToKeepUp";
 static NSString *const playbackBufferEmptyKeyPath = @"playbackBufferEmpty";
@@ -34,6 +35,7 @@ static NSString *const playbackRate = @"rate";
     BOOL _paused;
     BOOL _autoplay;
     BOOL _acceptInvalidCertificates;
+    float _pendingVolume;
 }
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
@@ -50,6 +52,8 @@ static NSString *const playbackRate = @"rate";
                                                  selector:@selector(applicationWillEnterForeground:)
                                                      name:UIApplicationWillEnterForegroundNotification
                                                    object:nil];
+
+        _pendingVolume = NAN;
 
     }
 
@@ -124,8 +128,37 @@ static NSString *const playbackRate = @"rate";
 
     if (_autoplay)
         [_player play];
+
+    if (!isnan(_pendingVolume)) {
+        [self setVolume:_pendingVolume];
+    }
     
     [[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
+}
+
+- (void)setVolume:(float)volume
+{
+    _pendingVolume = volume;
+
+    if (!_player) {
+        return;
+    }
+
+    float clamped = MAX(0.f, MIN(volume, 200.f));
+    if (clamped <= 1.f) {
+        clamped = clamped * 100.f;
+    }
+
+    int vlcVolume = (int)lroundf(clamped);
+    if (vlcVolume < 0) {
+        vlcVolume = 0;
+    } else if (vlcVolume > 200) {
+        vlcVolume = 200;
+    }
+
+    if (_player.audio.volume != vlcVolume) {
+        _player.audio.volume = vlcVolume;
+    }
 }
 
 - (void)setAutoplay:(BOOL)autoplay

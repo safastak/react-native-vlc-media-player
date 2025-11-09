@@ -323,6 +323,13 @@ declare class PlaybackMethods<T> extends Component<T> {
   seek(pos: number);
 
   /**
+   * Set the playback volume
+   *
+   * @param volume Volume level to apply
+   */
+  setVolume(volume: number);
+
+  /**
    * Resume playback
    */
   resume();

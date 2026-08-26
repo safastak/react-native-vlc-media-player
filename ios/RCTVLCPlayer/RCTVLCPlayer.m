@@ -22,8 +22,52 @@ static NSString *const playbackRate = @"rate";
 #endif
 
 
+// Debug file logger: every libVLC message plus the player's own markers, each stamped with
+// milliseconds since the logger was created. Enabled per source via `source.debugLog`.
+@interface RCTVLCDebugLogger : NSObject<VLCLogging>
+@property (nonatomic, readwrite) VLCLogLevel level;
+@property (nonatomic, strong) NSFileHandle *fileHandle;
+@property (nonatomic, assign) CFAbsoluteTime t0;
+- (void)mark:(NSString *)message;
+@end
+
+@implementation RCTVLCDebugLogger
+- (instancetype)initWithPath:(NSString *)path
+{
+    if ((self = [super init])) {
+        [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
+        _fileHandle = [NSFileHandle fileHandleForWritingAtPath:path];
+        _level = kVLCLogLevelDebug;
+        _t0 = CFAbsoluteTimeGetCurrent();
+    }
+    return self;
+}
+- (void)writeLine:(NSString *)line
+{
+    NSString *stamped = [NSString stringWithFormat:@"%9.3f %@\n", CFAbsoluteTimeGetCurrent() - _t0, line];
+    @synchronized (self) {
+        [_fileHandle writeData:[stamped dataUsingEncoding:NSUTF8StringEncoding]];
+    }
+}
+- (void)mark:(NSString *)message
+{
+    [self writeLine:[NSString stringWithFormat:@">>> %@", message]];
+}
+- (void)handleMessage:(NSString *)message logLevel:(VLCLogLevel)level context:(VLCLogContext *)context
+{
+    static const char *levels[] = {"E", "W", "I", "D"};
+    [self writeLine:[NSString stringWithFormat:@"%s %@/%@: %@",
+                     levels[MIN(MAX(level, 0), 3)], context.objectType ?: @"?", context.module ?: @"?", message]];
+}
+@end
+
+@interface RCTVLCPlayer ()
+- (void)dbg:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
+@end
+
 @implementation RCTVLCPlayer
 {
+    RCTVLCDebugLogger *_debugLogger;
 
     /* Required to publish events */
     RCTEventDispatcher *_eventDispatcher;
@@ -72,9 +116,21 @@ static NSString *const playbackRate = @"rate";
         [self play];
 }
 
+- (void)dbg:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2)
+{
+    if (!_debugLogger) return;
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    [_debugLogger mark:message];
+}
+
 - (void)play
 {
     if (_player) {
+        [self dbg:@"play (state=%d time=%d audioTracks=%d volume=%d muted=%d)", (int)_player.state,
+         [[_player time] intValue], _player.numberOfAudioTracks, _player.audio.volume, _player.audio.isMuted];
         [_player play];
         _paused = NO;
     }
@@ -83,6 +139,7 @@ static NSString *const playbackRate = @"rate";
 - (void)pause
 {
     if (_player) {
+        [self dbg:@"pause (state=%d time=%d)", (int)_player.state, [[_player time] intValue]];
         [_player pause];
         _paused = YES;
     }
@@ -128,6 +185,23 @@ static NSString *const playbackRate = @"rate";
     library.loggers = @[consoleLogger];
     #endif
 
+    // Opt-in debug log file (`source.debugLog`: YES → tmp/vlc-player.log, or a string path).
+    _debugLogger = nil;
+    id debugLog = [source objectForKey:@"debugLog"];
+    if ([debugLog isKindOfClass:[NSString class]] && [debugLog length] > 0) {
+        _debugLogger = [[RCTVLCDebugLogger alloc] initWithPath:debugLog];
+    } else if ([debugLog respondsToSelector:@selector(boolValue)] && [debugLog boolValue]) {
+        // One file per player instance (tmp/vlc-player-<n>.log) so a later player never truncates
+        // an earlier one's log.
+        static int instanceCounter = 0;
+        NSString *name = [NSString stringWithFormat:@"vlc-player-%d.log", ++instanceCounter];
+        _debugLogger = [[RCTVLCDebugLogger alloc] initWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name]];
+    }
+    if (_debugLogger) {
+        library.loggers = @[_debugLogger];
+        [self dbg:@"setSource view=%p uri=%@ autoplay=%d volume=%.0f initOptions=%@", self, uriString, shouldAutoplay, currentVolume, initOptions];
+    }
+
     // Create dialog provider with custom UI to handle dialogs programmatically
     self.dialogProvider = [[VLCDialogProvider alloc] initWithLibrary:library customUI:YES];
     self.dialogProvider.customRenderer = self;
@@ -145,8 +219,10 @@ static NSString *const playbackRate = @"rate";
         NSLog(@"Failed to activate audio session: %@", error);
     }
 
-    if (shouldAutoplay)
+    if (shouldAutoplay) {
+        [self dbg:@"autoplay play"];
         [_player play];
+    }
 
     if (!isnan(currentVolume)) {
         [self setVolume:currentVolume];
@@ -176,6 +252,7 @@ static NSString *const playbackRate = @"rate";
     }
 
     if (_player.audio.volume != vlcVolume) {
+        [self dbg:@"setVolume %d -> %d (state=%d)", _player.audio.volume, vlcVolume, (int)_player.state];
         _player.audio.volume = vlcVolume;
     }
 }
@@ -190,6 +267,7 @@ static NSString *const playbackRate = @"rate";
 
 - (void)setPaused:(BOOL)paused
 {
+    [self dbg:@"setPaused %d", paused];
     _paused = paused;
 
     if (!paused) {
@@ -235,6 +313,7 @@ static NSString *const playbackRate = @"rate";
     NSLog(@"standardUserDefaults %@",defaults);
     if (_player) {
         VLCMediaPlayerState state = _player.state;
+        [self dbg:@"state -> %d (time=%d audioTracks=%d)", (int)state, [[_player time] intValue], _player.numberOfAudioTracks];
         switch (state) {
             case VLCMediaPlayerStateOpening:
                  NSLog(@"VLCMediaPlayerStateOpening  %i", _player.numberOfAudioTracks);
@@ -248,6 +327,11 @@ static NSString *const playbackRate = @"rate";
             case VLCMediaPlayerStatePaused:
                 _paused = YES;
                 NSLog(@"VLCMediaPlayerStatePaused %i", _player.numberOfAudioTracks);
+                // A player paused by libVLC itself (`--start-paused`) never reaches
+                // updateVideoProgress, so emit onVideoLoad from here once the size is known.
+                if (_player.videoSize.width > 0) {
+                    [self updateVideoInfo];
+                }
                 self.onVideoPaused(@{
                                      @"target": self.reactTag
                                      });
@@ -399,6 +483,7 @@ static NSString *const playbackRate = @"rate";
 {
     if ([_player isSeekable]) {
         if (pos>=0 && pos <= 1) {
+            [self dbg:@"seek position=%.4f (state=%d time=%d)", pos, (int)_player.state, [[_player time] intValue]];
             [_player setPosition:pos];
         }
     }
@@ -478,6 +563,7 @@ static NSString *const playbackRate = @"rate";
 - (void)setMuted:(BOOL)value
 {
     if (_player) {
+        [self dbg:@"setMuted %d", value];
         [[_player audio] setMuted:value];
     }
 }

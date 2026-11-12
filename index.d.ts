@@ -232,6 +232,30 @@ export type VLCPlayerProps = VLCPlayerCallbackProps & {
   volume?: number;
 
   /**
+   * iOS: enable VLC's adjust video filter (contrast / brightness / saturation below).
+   * @default false
+   */
+  adjustEnabled?: boolean;
+
+  /**
+   * iOS: adjust-filter contrast, scales luma around mid-grey. Neutral 1, range 0…2.
+   * @default 1
+   */
+  contrast?: number;
+
+  /**
+   * iOS: adjust-filter brightness; luma moves by (brightness − 1) × 255. Neutral 1, range 0…2.
+   * @default 1
+   */
+  brightness?: number;
+
+  /**
+   * iOS: adjust-filter saturation, scales chroma around neutral. Neutral 1, range 0…3.
+   * @default 1
+   */
+  saturation?: number;
+
+  /**
    * Set to `true` or `false` to mute the player
    * @default false
    */

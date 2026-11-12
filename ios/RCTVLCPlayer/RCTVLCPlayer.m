@@ -80,6 +80,13 @@ static NSString *const playbackRate = @"rate";
     BOOL _autoplay;
     BOOL _acceptInvalidCertificates;
     float _pendingVolume;
+
+    // Colour adjustment (VLC's adjust video filter). Held here and re-applied to every new player,
+    // since a source change creates a fresh VLCMediaPlayer. Neutral values are 1.
+    BOOL _adjustEnabled;
+    float _adjustContrast;
+    float _adjustBrightness;
+    float _adjustSaturation;
 }
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
@@ -99,6 +106,10 @@ static NSString *const playbackRate = @"rate";
 
         _pendingVolume = NAN;
 
+        _adjustEnabled = NO;
+        _adjustContrast = 1;
+        _adjustBrightness = 1;
+        _adjustSaturation = 1;
     }
 
     return self;
@@ -228,7 +239,48 @@ static NSString *const playbackRate = @"rate";
         [self setVolume:currentVolume];
     }
 
+    [self applyAdjust];
+
     // [bavv edit end]
+}
+
+// Pushes the held colour adjustment to the current player's adjust filter. VLC's luma rule is
+// `contrast × (y − 128) + 128 + (brightness − 1) × 255`, and saturation scales chroma around
+// neutral; the filter is disabled entirely when the adjustment is off.
+- (void)applyAdjust
+{
+    if (!_player) {
+        return;
+    }
+    VLCAdjustFilter *filter = _player.adjustFilter;
+    filter.contrast.value = @(_adjustContrast);
+    filter.brightness.value = @(_adjustBrightness);
+    filter.saturation.value = @(_adjustSaturation);
+    filter.enabled = _adjustEnabled;
+}
+
+- (void)setAdjustEnabled:(BOOL)enabled
+{
+    _adjustEnabled = enabled;
+    [self applyAdjust];
+}
+
+- (void)setContrast:(float)contrast
+{
+    _adjustContrast = contrast;
+    [self applyAdjust];
+}
+
+- (void)setBrightness:(float)brightness
+{
+    _adjustBrightness = brightness;
+    [self applyAdjust];
+}
+
+- (void)setSaturation:(float)saturation
+{
+    _adjustSaturation = saturation;
+    [self applyAdjust];
 }
 
 - (void)setVolume:(float)volume

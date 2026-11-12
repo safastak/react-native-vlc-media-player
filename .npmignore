@@ -1,0 +1,11 @@
+# Published package = the library only (npm falls back to .gitignore when this file is absent).
+node_modules/
+.DS_Store
+*.log
+package-lock.json
+.git/
+.gitignore
+
+# Xcode per-user state
+**/xcuserdata/
+**/*.xcuserstate

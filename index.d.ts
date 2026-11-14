@@ -101,6 +101,11 @@ type OnProgressEventProps = Pick<VideoInfo, "duration" | "target"> & {
   currentTime: number;
 
   /**
+   * iOS: set on the event a pause emits, whose currentTime is the position the pause landed on
+   */
+  paused?: boolean;
+
+  /**
    * Current playback position
    */
   position: number;
@@ -127,6 +132,12 @@ export type VLCPlayerCallbackProps = {
    * @param event - Event properties
    */
   onProgress?: (event: OnProgressEventProps) => void;
+  /**
+   * iOS: while playing, emit onProgress from libVLC's live clock every this many ms (0 = off, only
+   * VLCKit's throttled notifications). A pause also emits one progress event with `paused: true`
+   * at the position it landed on.
+   */
+  progressUpdateInterval?: number;
 
   /**
    * Called when media is paused

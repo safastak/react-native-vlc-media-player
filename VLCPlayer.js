@@ -248,7 +248,8 @@ export default class VLCPlayer extends Component {
       onVideoLoad: this._onLoad,
       onRecordingState: this._onRecordingState,
       onSnapshot: this._onSnapshot,
-      progressUpdateInterval: this.props.onProgress ? 250 : 0,
+      // Opt-in live-clock progress while playing (ms); 0 = VLCKit's own notifications only.
+      progressUpdateInterval: this.props.progressUpdateInterval || 0,
     });
 
     return <RCTVLCPlayer ref={this._assignRoot} {...nativeProps} />;
@@ -299,6 +300,7 @@ VLCPlayer.propTypes = {
 
   onError: PropTypes.func,
   onProgress: PropTypes.func,
+  progressUpdateInterval: PropTypes.number,
   onEnded: PropTypes.func,
   onStopped: PropTypes.func,
   onPlaying: PropTypes.func,

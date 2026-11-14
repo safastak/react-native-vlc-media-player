@@ -27,6 +27,8 @@ RCT_EXPORT_VIEW_PROPERTY(onVideoLoadStart, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onVideoLoad, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onRecordingState, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onSnapshot, RCTDirectEventBlock);
+// Opt-in: emit onVideoProgress from libVLC's live clock every N ms while playing (0 = off).
+RCT_EXPORT_VIEW_PROPERTY(progressUpdateInterval, float);
 
 - (dispatch_queue_t)methodQueue
 {

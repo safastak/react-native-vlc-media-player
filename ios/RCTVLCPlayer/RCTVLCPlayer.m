@@ -10,6 +10,14 @@
 #endif
 #import <AVFoundation/AVFoundation.h>
 #import <math.h>
+
+// libVLC's live playback clock. VLCKit's `time` is a value cached from its (throttled) time-changed
+// notifications, so it can trail the picture by a large fraction of a second; the libVLC call reads
+// the clock itself. VLCKit keeps the libVLC player behind a method it doesn't declare publicly.
+extern int64_t libvlc_media_player_get_time(void *p_mi);
+@interface VLCMediaPlayer (RCTLiveClock)
+- (void *)libVLCMediaPlayer;
+@end
 static NSString *const statusKeyPath = @"status";
 static NSString *const playbackLikelyToKeepUpKeyPath = @"playbackLikelyToKeepUp";
 static NSString *const playbackBufferEmptyKeyPath = @"playbackBufferEmpty";
@@ -84,6 +92,10 @@ static NSString *const playbackRate = @"rate";
     // Colour adjustment (VLC's adjust video filter). Held here and re-applied to every new player,
     // since a source change creates a fresh VLCMediaPlayer. Neutral values are 1.
     BOOL _adjustEnabled;
+    // Opt-in progress cadence (progressUpdateInterval, ms): while playing, a timer emits
+    // onVideoProgress from the live clock this often. 0 = only VLCKit's own notifications.
+    float _progressUpdateIntervalMs;
+    NSTimer *_progressTimer;
     float _adjustContrast;
     float _adjustBrightness;
     float _adjustSaturation;
@@ -378,6 +390,8 @@ static NSString *const playbackRate = @"rate";
                 break;
             case VLCMediaPlayerStatePaused:
                 _paused = YES;
+                [self stopProgressTimer];
+                [self emitPausedProgress];
                 NSLog(@"VLCMediaPlayerStatePaused %i", _player.numberOfAudioTracks);
                 // A player paused by libVLC itself (`--start-paused`) never reaches
                 // updateVideoProgress, so emit onVideoLoad from here once the size is known.
@@ -389,6 +403,7 @@ static NSString *const playbackRate = @"rate";
                                      });
                 break;
             case VLCMediaPlayerStateStopped:
+                [self stopProgressTimer];
                 NSLog(@"VLCMediaPlayerStateStopped %i", _player.numberOfAudioTracks);
                 self.onVideoStopped(@{
                                       @"target": self.reactTag
@@ -402,6 +417,7 @@ static NSString *const playbackRate = @"rate";
                 break;
             case VLCMediaPlayerStatePlaying:
                 _paused = NO;
+                [self startProgressTimer];
                 NSLog(@"VLCMediaPlayerStatePlaying %i", _player.numberOfAudioTracks);
                 self.onVideoPlaying(@{
                                       @"target": self.reactTag,
@@ -410,6 +426,7 @@ static NSString *const playbackRate = @"rate";
                                       });
                 break;
             case VLCMediaPlayerStateEnded:
+                [self stopProgressTimer];
                 NSLog(@"VLCMediaPlayerStateEnded %i",  _player.numberOfAudioTracks);
                 int currentTime   = [[_player time] intValue];
                 int remainingTime = [[_player remainingTime] intValue];
@@ -457,10 +474,65 @@ static NSString *const playbackRate = @"rate";
 
 //   ===================================
 
+- (int)liveTimeMs
+{
+    if (_player && [_player respondsToSelector:@selector(libVLCMediaPlayer)]) {
+        void *mediaPlayer = [_player libVLCMediaPlayer];
+        if (mediaPlayer) {
+            int64_t time = libvlc_media_player_get_time(mediaPlayer);
+            if (time >= 0) {
+                return (int)time;
+            }
+        }
+    }
+    return [[_player time] intValue];
+}
+
+- (void)setProgressUpdateInterval:(float)intervalMs
+{
+    _progressUpdateIntervalMs = intervalMs;
+    if (!_paused && _player.isPlaying) {
+        [self startProgressTimer];
+    } else {
+        [self stopProgressTimer];
+    }
+}
+
+- (void)startProgressTimer
+{
+    [self stopProgressTimer];
+    if (_progressUpdateIntervalMs <= 0) return;
+    __weak RCTVLCPlayer *weakSelf = self;
+    _progressTimer = [NSTimer timerWithTimeInterval:_progressUpdateIntervalMs / 1000.0 repeats:YES block:^(NSTimer *timer) {
+        [weakSelf updateVideoProgress];
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:_progressTimer forMode:NSRunLoopCommonModes];
+}
+
+- (void)stopProgressTimer
+{
+    [_progressTimer invalidate];
+    _progressTimer = nil;
+}
+
+// The position a pause landed on, from the live clock (VLCKit's cached time can be stale here).
+- (void)emitPausedProgress
+{
+    if (!_player || !self.onVideoProgress) return;
+    self.onVideoProgress(@{
+                           @"target": self.reactTag,
+                           @"currentTime": [NSNumber numberWithInt:[self liveTimeMs]],
+                           @"remainingTime": [NSNumber numberWithInt:[[_player remainingTime] intValue]],
+                           @"duration": [NSNumber numberWithInt:[_player.media.length intValue]],
+                           @"position": [NSNumber numberWithFloat:_player.position],
+                           @"paused": @YES,
+                           });
+}
+
 - (void)updateVideoProgress
 {
     if (_player && !_paused) {
-        int currentTime   = [[_player time] intValue];
+        int currentTime   = [self liveTimeMs];
         int remainingTime = [[_player remainingTime] intValue];
         int duration      = [_player.media.length intValue];
         [self updateVideoInfo];
@@ -711,6 +783,7 @@ static NSString *const playbackRate = @"rate";
 
 - (void)_release
 {
+    [self stopProgressTimer];
     // Don't remove notification observers here - they should persist for app lifecycle
     // [[NSNotificationCenter defaultCenter] removeObserver:self];
 
